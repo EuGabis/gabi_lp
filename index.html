@@ -164,10 +164,13 @@
   .route .to{text-align:right}
   .path{position:relative;flex:1;height:2px;margin:0 6px;align-self:center;margin-top:-6px}
   .path::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,var(--border-strong) 0 5px,transparent 5px 11px)}
-  .path .trail{position:absolute;left:0;top:0;height:2px;width:0;background:linear-gradient(90deg,var(--brand-dk),var(--brand-2));border-radius:2px}
-  .path .plane{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);color:var(--brand);font-size:19px;filter:drop-shadow(0 3px 7px rgba(242,135,30,.55))}
-  .fly .trail{animation:trail 2s var(--ease) forwards}
-  .fly .plane{animation:flyx 2s var(--ease) forwards}
+  /* padrão = rota concluída (avião no destino); .anim reseta pra animar */
+  .path .trail{position:absolute;left:0;top:0;height:2px;width:100%;background:linear-gradient(90deg,var(--brand-dk),var(--brand-2));border-radius:2px}
+  .path .plane{position:absolute;top:50%;left:100%;transform:translate(-50%,-50%);color:var(--brand);font-size:19px;filter:drop-shadow(0 3px 7px rgba(242,135,30,.55))}
+  .anim .path .trail{width:0}
+  .anim .path .plane{left:0}
+  .anim .fly .trail{animation:trail 2s var(--ease) forwards}
+  .anim .fly .plane{animation:flyx 2s var(--ease) forwards}
   @keyframes trail{to{width:100%}}
   @keyframes flyx{0%{left:0}100%{left:100%}}
   .price{margin-top:30px;display:flex;align-items:baseline;gap:15px;flex-wrap:wrap}
@@ -252,10 +255,13 @@
   footer .wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center}
   footer .tag{font-family:var(--display);font-weight:700;color:var(--muted);font-style:italic}
 
-  /* reveal */
-  .reveal{opacity:0;transform:translateY(22px);filter:blur(6px);transition:opacity .7s var(--ease),transform .7s var(--ease),filter .7s var(--ease)}
-  .reveal.in{opacity:1;transform:none;filter:none}
-  .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
+  /* reveal — PROGRESSIVE ENHANCEMENT: o conteúdo é visível por padrão.
+     Só some quando o JS confirma que vai animar (adiciona .anim no <html>).
+     Sem JS, sem IntersectionObserver ou com reduce-motion, nada fica escondido —
+     assim um erro de script nunca deixa a página em branco. */
+  .anim .reveal{opacity:0;transform:translateY(22px);filter:blur(6px);transition:opacity .7s var(--ease),transform .7s var(--ease),filter .7s var(--ease)}
+  .anim .reveal.in{opacity:1;transform:none;filter:none}
+  .anim .reveal.d1{transition-delay:.08s}.anim .reveal.d2{transition-delay:.16s}.anim .reveal.d3{transition-delay:.24s}
 
   @media(prefers-reduced-motion:reduce){
     *{animation:none!important}
@@ -267,7 +273,6 @@
     html{scroll-behavior:auto}
   }
 </style>
-<noscript><style>.reveal{opacity:1!important;transform:none!important;filter:none!important}.path .trail{width:100%}.path .plane{left:100%}</style></noscript>
 </head>
 <body>
 
@@ -286,6 +291,12 @@
     <a class="btn" href="#oferta">Quero começar</a>
   </div>
 </header>
+
+<script>
+  // Liga o modo animação SÓ quando dá pra animar com segurança. Sem isto (JS
+  // off, sem IntersectionObserver, ou reduce-motion) o conteúdo fica visível.
+  try{ if('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion:reduce)').matches){ document.documentElement.classList.add('anim'); } }catch(_){}
+</script>
 
 <main id="topo">
 
@@ -526,14 +537,22 @@
   addEventListener('scroll',()=>topbar.classList.toggle('stuck', scrollY>12), {passive:true});
 
   // reveal + fly-in do avião
-  const io = new IntersectionObserver((es)=>{
-    for(const e of es){ if(e.isIntersecting){
-      e.target.classList.add('in');
-      if(e.target.id==='ticket') e.target.classList.add('fly');
-      io.unobserve(e.target);
-    }}
-  },{threshold:.16});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+  try{
+    const io = new IntersectionObserver((es)=>{
+      for(const e of es){ if(e.isIntersecting){
+        e.target.classList.add('in');
+        if(e.target.id==='ticket') e.target.classList.add('fly');
+        io.unobserve(e.target);
+      }}
+    },{threshold:.16});
+    document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+    // Rede de segurança: se por qualquer motivo o observer não revelar algo
+    // (aba em segundo plano, scroll programático, etc.), revela tudo em 2,5s.
+    setTimeout(()=>{
+      document.querySelectorAll('.reveal:not(.in)').forEach(el=>el.classList.add('in'));
+      const t=document.getElementById('ticket'); if(t) t.classList.add('fly');
+    },2500);
+  }catch(_){ document.documentElement.classList.remove('anim'); }
 
   // FAQ: altura animada
   document.querySelectorAll('.faq details').forEach(d=>{
